@@ -1,5 +1,18 @@
 [
     {
+        "version": "5.9.0",
+        "changes": [
+            {
+                "note": "Add CurveLiquidityProvider \"direct\" route to EP consumer.",
+                "pr": 127
+            },
+            {
+                "note": "Fix compiler error on `ILiquidityProvider` call",
+                "pr": 127
+            }
+        ]
+    },
+    {
         "version": "5.8.2",
         "changes": [
             {

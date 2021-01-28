@@ -9,7 +9,7 @@ import {
     FillQuoteTransformerSide,
     findTransformerNonce,
 } from '@0x/order-utils';
-import { BigNumber, providerUtils } from '@0x/utils';
+import { AbiEncoder, BigNumber, providerUtils } from '@0x/utils';
 import { SupportedProvider, ZeroExProvider } from '@0x/web3-wrapper';
 import * as _ from 'lodash';
 
@@ -27,7 +27,7 @@ import {
     SwapQuoteGetOutputOpts,
 } from '../types';
 import { assert } from '../utils/assert';
-import { ERC20BridgeSource, UniswapV2FillData } from '../utils/market_operation_utils/types';
+import { CurveFillData, ERC20BridgeSource, UniswapV2FillData } from '../utils/market_operation_utils/types';
 import { getTokenFromAssetData } from '../utils/utils';
 
 import { getSwapMinBuyAmount } from './utils';
@@ -143,6 +143,27 @@ export class ExchangeProxySwapQuoteConsumer implements SwapQuoteConsumerBase {
                         sellAmount,
                         minBuyAmount,
                         NULL_BYTES,
+                    )
+                    .getABIEncodedTransactionData(),
+                ethAmount: isFromETH ? sellAmount : ZERO_AMOUNT,
+                toAddress: this._exchangeProxy.address,
+                allowanceTarget: this.contractAddresses.exchangeProxyAllowanceTarget,
+            };
+        }
+
+        if (isDirectSwapCompatible(quote, optsWithDefaults, [ERC20BridgeSource.Curve, ERC20BridgeSource.Swerve])) {
+            const fillData = quote.orders[0].fills[0].fillData as CurveFillData;
+            return {
+                calldataHexString: this._exchangeProxy
+                    .sellToLiquidityProvider(
+                        isFromETH ? ETH_TOKEN_ADDRESS : sellToken,
+                        isToETH ? ETH_TOKEN_ADDRESS : buyToken,
+                        '0xe3a207e4225d459095491ea75d30b31968dff887',
+                        // this.contractAddresses.curveLiquidityProvider,
+                        NULL_ADDRESS,
+                        sellAmount,
+                        minBuyAmount,
+                        encodeCurveLiquidityProviderData(fillData),
                     )
                     .getABIEncodedTransactionData(),
                 ethAmount: isFromETH ? sellAmount : ZERO_AMOUNT,
@@ -317,4 +338,19 @@ function isDirectSwapCompatible(
         return false;
     }
     return true;
+}
+
+function encodeCurveLiquidityProviderData(fillData: CurveFillData): string {
+    const encoder = AbiEncoder.create([
+        { name: 'curveAddress', type: 'address' },
+        { name: 'exchangeFunctionSelector', type: 'bytes4' },
+        { name: 'fromCoinIdx', type: 'int128' },
+        { name: 'toCoinIdx', type: 'int128' },
+    ]);
+    return encoder.encode([
+        fillData.pool.poolAddress,
+        fillData.pool.exchangeFunctionSelector,
+        fillData.fromTokenIdx,
+        fillData.toTokenIdx,
+    ]);
 }
